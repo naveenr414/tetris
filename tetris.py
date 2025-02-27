@@ -1,7 +1,10 @@
 import gymnasium as gym
 import numpy as np
 from tetris_gymnasium.envs.tetris import Tetris
+import sys
+import cv2
 from policies import *
+import time
 
 def get_formatted_queue(queue):
     """Turn a list of pieces into a list of integers
@@ -58,7 +61,7 @@ def format_obs(obs,curr_piece):
     char_board[((active_mask*board) > 0) & (board == curr_piece)] = "o"  
     return {'board': char_board, 'queue': formatted_queue, 'holder': formatted_holder}
 
-def run_loop(action_function):
+def run_loop(action_function,render=False):
     """Main loop that plays tetris given an action function
     
     Arguments:
@@ -66,7 +69,12 @@ def run_loop(action_function):
     
     Returns: Total reward for playing """
 
-    env = gym.make("tetris_gymnasium/Tetris", render_mode="ansi")
+    if render:
+        render_mode = "human"
+    else:
+        render_mode = "ansi"
+
+    env = gym.make("tetris_gymnasium/Tetris", render_mode=render_mode)
     obs, _ = env.reset(seed=seed)
     curr_piece = np.max(obs["board"])
     curr_queue = get_formatted_queue(obs["queue"])
@@ -75,6 +83,11 @@ def run_loop(action_function):
     terminated = False
     total_reward = 0
     while not terminated:
+        if render:
+            cv2.waitKey(1)
+            env.render() 
+            time.sleep(0.1)
+            
         action = action_function(env,format_obs(obs,curr_piece))
         obs, reward, terminated, _, _ = env.step(action)
         new_queue = get_formatted_queue(obs["queue"])
@@ -94,4 +107,4 @@ def run_loop(action_function):
     return total_reward
 
 seed = 43
-run_loop(random_move)
+run_loop(random_move,render=True)
