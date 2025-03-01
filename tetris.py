@@ -55,11 +55,13 @@ def format_obs(obs,curr_piece):
     formatted_holder = get_formatted_holder(obs["holder"])
 
     board =  obs["board"][:-4,4:-4]
+
+    # TODO: The active mask might be below the grid; unsure how to handle this
     active_mask = obs["active_tetromino_mask"][:-4,4:-4]
     char_board = np.full(board.shape, ".", dtype=str) 
     char_board[board > 0] = "x"  
     char_board[((active_mask*board) > 0) & (board == curr_piece)] = "o"  
-    return {'board': char_board, 'queue': formatted_queue, 'holder': formatted_holder}
+    return {'board': char_board, 'queue': formatted_queue, 'holder': formatted_holder, 'active_mask': active_mask}
 
 def run_loop(action_function,render=False):
     """Main loop that plays tetris given an action function
@@ -87,7 +89,7 @@ def run_loop(action_function,render=False):
             cv2.waitKey(1)
             env.render() 
             time.sleep(0.1)
-            
+
         action = action_function(env,format_obs(obs,curr_piece))
         obs, reward, terminated, _, _ = env.step(action)
         new_queue = get_formatted_queue(obs["queue"])
@@ -106,5 +108,7 @@ def run_loop(action_function,render=False):
     print("Game Over! Score {}".format(total_reward))
     return total_reward
 
-seed = 43
-run_loop(random_move,render=True)
+average_score_10 = 0
+for seed in range(43,53):
+    average_score_10 += run_loop(play_max_score,render=False)
+print("Total average score {}".format(average_score_10/10))
