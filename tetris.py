@@ -88,20 +88,22 @@ def run_loop(action_function,render=False):
         if render:
             cv2.waitKey(1)
             env.render() 
-            time.sleep(0.1)
+            time.sleep(0.5)
 
-        action = action_function(env,format_obs(obs,curr_piece))
-        obs, reward, terminated, _, _ = env.step(action)
+        actions = action_function(env,format_obs(obs,curr_piece))
+        for action in actions:
+            obs, reward, terminated, _, _ = env.step(action)
+            total_reward += reward
+            if terminated:
+                break
         new_queue = get_formatted_queue(obs["queue"])
         new_holder = get_formatted_holder(obs["holder"])
-        total_reward += reward
 
         if new_queue != curr_queue or new_holder != curr_holder:
             if new_holder != curr_holder and new_queue == curr_queue:
                 curr_piece = curr_holder 
             else:
                 curr_piece = curr_queue[0]
-
         curr_holder = new_holder
         curr_queue = new_queue
 
