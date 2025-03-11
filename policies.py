@@ -1,6 +1,7 @@
 import gymnasium as gym
 import numpy as np
 from tetris_gymnasium.envs.tetris import Tetris
+# from tetris_gymnasium.components.tetromino import Tetromino
 from copy import deepcopy 
 
 def random_move(env,obs):
@@ -254,6 +255,34 @@ def rotate_counterclockwise(grid,active_mask):
     new_active_mask = np.concatenate(([[0 for i in range(len(active_mask[0]))]], active_mask[:-1]))
     return new_grid, new_active_mask
 
+def swap(grid, holder, queue):
+    """Switch the current piece with the held piece
+    
+    Arguments:
+        grid: List of lists with x, o
+        holder: One Integer or '.', for what's in the hold currently
+        queue: List of four numbers, the upcoming pieces
+    
+    Returns: New grid, another list of lists with x and o"""
+    def switch(grid, piece_id):
+        new_grid = deepcopy(grid)
+        for i in range(len(grid)):
+            for j in range(len(grid[i])):
+                if new_grid[i][j] == "o":
+                    new_grid[i][j] = "."
+
+        piece_matrix = Tetris.TETROMINOES[piece_id-2].matrix
+        piece = [['.' if piece_matrix[j][i]==0 else 'o' for i  in range(piece_matrix.shape[1])] for j in range(piece_matrix.shape[0])]
+        position = len(piece)
+
+        new_grid[1:position+1, (grid.shape[1]-position+1)//2:(grid.shape[1]-position+1)//2 + position] = deepcopy(piece)
+        return new_grid
+
+    if holder == '.':
+        return switch(grid, queue[0])
+    else:
+        return switch(grid, holder)
+
 
 def play_max_score(env,obs):
     """Play the move that maximizes score_grid
@@ -269,71 +298,78 @@ def play_max_score(env,obs):
 
     grid = obs['board']
     active_mask = obs['active_mask']
+    holder = obs['holder']
+    queue = obs['queue']
 
     _,width = len(grid),len(grid[0])
 
-    best_move_overall = -10000
     curr_move_overall = ''
-
-    for rotation in ['','c','w','ww']:
-        new_grid = grid
-        if rotation == 'c':
-            new_grid,_ = rotate_clockwise(grid,active_mask)
-            if new_grid is None:
-                continue 
-        if rotation == 'w':
-            new_grid,_ = rotate_counterclockwise(grid,active_mask)
-            if new_grid is None:
-                continue 
-        elif rotation == 'ww':
-            new_grid,new_active_mask = rotate_counterclockwise(grid,active_mask)
-            if new_grid is None:
-                continue 
-            new_grid,_ = rotate_counterclockwise(new_grid,new_active_mask)
-            if new_grid is None:
-                continue 
-
-        score_by_num_left = []
-        moves_by_left = []
-        grid_left = deepcopy(new_grid)
-        for num_left in range(width):
-            if grid_left is None:
-                break 
+    scores = []
+    moves = []
+    for swap_ in ['', 's']:
+        for rotation in ['','c','w','ww']:
+            if swap_ == 's':
+                new_grid = swap(grid,holder,queue)
             else:
-                moved_down_grid,num_move_down = move_down_max(grid_left)
-                moves_by_left.append("l"*num_left+"d"*num_move_down)
-                score_by_num_left.append(score_grid(moved_down_grid))
-                grid_left = move_left(grid_left)
+                new_grid = grid
+            if rotation == 'c':
+                new_grid,_ = rotate_clockwise(grid,active_mask)
+                if new_grid is None:
+                    continue 
+            if rotation == 'w':
+                new_grid,_ = rotate_counterclockwise(grid,active_mask)
+                if new_grid is None:
+                    continue 
+            elif rotation == 'ww':
+                new_grid,new_active_mask = rotate_counterclockwise(grid,active_mask)
+                if new_grid is None:
+                    continue 
+                new_grid,_ = rotate_counterclockwise(new_grid,new_active_mask)
+                if new_grid is None:
+                    continue 
 
-        score_by_num_right = []
-        moves_by_right= []
-        grid_right = deepcopy(new_grid)
-        for num_right in range(width):
-            if grid_right is None:
-                break 
-            else:
-                moved_down_grid,num_move_down = move_down_max(grid_right)
-                moves_by_right.append("r"*num_right+"d"*num_move_down)
-                score_by_num_right.append(score_grid(moved_down_grid))
-                grid_right = move_right(grid_right)
-        
-        score_by_num_left += score_by_num_right
-        moves_by_left += moves_by_right
+            grid_left = deepcopy(new_grid)
+            for num_left in range(width):
+                if grid_left is None:
+                    break 
+                else:
+                    moved_down_grid,num_move_down = move_down_max(grid_left)
+                    moves.append(swap_ + rotation + "l"*num_left+"d"*num_move_down)
+                    scores.append(score_grid(moved_down_grid))
+                    grid_left = move_left(grid_left)
 
-        best_move = np.argmax(score_by_num_left)
+            grid_right = deepcopy(new_grid)
+            for num_right in range(width):
+                if grid_right is None:
+                    break 
+                else:
+                    moved_down_grid,num_move_down = move_down_max(grid_right)
+                    moves.append(swap_ + rotation + "r"*num_right+"d"*num_move_down)
+                    scores.append(score_grid(moved_down_grid))
+                    grid_right = move_right(grid_right)
 
-        if score_by_num_left[best_move] > best_move_overall:
-            curr_move_overall = rotation+moves_by_left[best_move]
-            best_move_overall = score_by_num_left[best_move]
+    best_move = np.argmax(scores)
+    curr_move_overall = moves[best_move]
+
     if len(curr_move_overall) == 0:
-        return env.unwrapped.actions.move_down
-    elif curr_move_overall[0] == 'l':  
-        return env.unwrapped.actions.move_left
-    elif curr_move_overall[0] == 'r':
-        return env.unwrapped.actions.move_right
-    elif curr_move_overall[0] == 'c':
-        return env.unwrapped.actions.rotate_clockwise
-    elif curr_move_overall[0] == 'w':
-        return env.unwrapped.actions.rotate_counterclockwise
-    else:
-        return env.unwrapped.actions.move_down
+        return [env.unwrapped.actions.hard_drop]
+    actions = []
+    for action in curr_move_overall:
+        if action=='s':
+            actions.append(env.unwrapped.actions.swap)
+        elif action=='l':
+            actions.append(env.unwrapped.actions.move_left)
+        elif action=='r':
+            actions.append(env.unwrapped.actions.move_right)
+        elif action=='c':
+            actions.append(env.unwrapped.actions.rotate_clockwise)
+        elif action=='w':
+            actions.append(env.unwrapped.actions.rotate_counterclockwise)
+        elif action=='d':
+            actions.append(env.unwrapped.actions.hard_drop)
+            return(actions)
+
+    return actions
+    
+
+# print(Tetris.TETROMINOES[0])
